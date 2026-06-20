@@ -19,6 +19,11 @@ cmap: viridis
 time_col: 6                # signed seconds, 0 == current frame
 time_cmap: coolwarm        # past=blue ... t0=white ... future=red
 
+# --- similarity mode (judge feature quality: cosine sim to a reference) ---
+ref: moving                # moving | static  (GT-class prototype); or use --ref-idx / --ref-xyz / --pick
+feat_start: 8              # first column of the feature block (needs a --feat-dims dump)
+sim_cmap: turbo            # bright = similar to the reference feature
+
 # --- label / confusion modes (INTEGER class columns; modes error on float feature cols) ---
 # feature dump (N,8) stores the GT label at col 7. confusion needs a prediction
 # dump that carries BOTH gt and pred integer columns.

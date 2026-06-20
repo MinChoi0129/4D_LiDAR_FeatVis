@@ -21,9 +21,14 @@ time       : the per-point time column (signed seconds) -> diverging colormap
              (past=blue ... present=white ... future=red). Reveals the 4D motion
              trails in an accumulated multi-sweep dump.
 label      : an INTEGER class column -> discrete MOS colors (moving=green,
-             static=gray, ignore=purple). Default col 7 (the feature dump's GT).
+             static=gray, ignore=dim). Default col 7 (the feature dump's GT).
 confusion  : a gt + a pred INTEGER column -> TP/FP/FN/TN colors. Needs a
              prediction dump (schema B); a feature dump has no pred column.
+similarity : cosine similarity of every point's FEATURE (cols 8:, the feat block)
+             to a reference -> colormap (bright = similar). The honest "are the
+             features good?" view -- a good feature lights up a whole object and
+             its siblings together. Reference = a clicked point, an (x,y,z), or a
+             'moving'/'static' GT prototype. Needs a dump made with --feat-dims>0.
 """
 from __future__ import annotations
 
@@ -159,6 +164,61 @@ def color_confusion(data: np.ndarray, gt_col: int = 7, pred_col: int = 8,
     return out
 
 
+def _features(data: np.ndarray, feat_start: int = 8) -> np.ndarray:
+    """The reduced per-point feature block (cols feat_start:), or a clear error."""
+    if data.shape[1] <= feat_start:
+        raise ValueError(
+            f"similarity mode needs a feature block at col {feat_start}+, but the npy has "
+            f"only {data.shape[1]} columns. Re-extract WITH features:\n"
+            f"  python tools/extract_features_4d.py --feat-dims 32 --ckpt ... --out X.npy\n"
+            f"(PCA-RGB alone is 3 dims -- too few to compare points.)"
+        )
+    return data[:, feat_start:].astype(np.float32)
+
+
+def reference_vector(data: np.ndarray, spec, feat_start: int = 8,
+                     label_col: int = 7) -> np.ndarray:
+    """Build the reference feature to compare against.
+
+    spec may be: an int point index; an (x,y,z) -> nearest point; or 'moving' /
+    'static' -> the mean feature of that GT class (a class prototype).
+    """
+    F = _features(data, feat_start)
+    if isinstance(spec, (int, np.integer)):
+        return F[int(spec)]
+    if isinstance(spec, (list, tuple, np.ndarray)) and len(spec) == 3:
+        d = np.linalg.norm(data[:, :3] - np.asarray(spec, np.float32), axis=1)
+        return F[int(d.argmin())]
+    if spec in ("moving", "static"):
+        cls = 1 if spec == "moving" else 0
+        lab = np.rint(data[:, label_col]).astype(int)
+        m = lab == cls
+        if not m.any():
+            raise ValueError(f"no '{spec}' (class {cls}) points in col {label_col} -- "
+                             f"cannot build a prototype on this frame.")
+        return F[m].mean(0)
+    raise ValueError(f"bad reference spec: {spec!r} (use int / (x,y,z) / 'moving' / 'static')")
+
+
+def color_similarity(data: np.ndarray, ref_vec: np.ndarray, feat_start: int = 8,
+                     cmap: str = "turbo", norm: str = "percentile") -> np.ndarray:
+    """Cosine similarity of each point's feature to ref_vec -> colormap (bright=similar).
+
+    This is the honest "are the features good?" view: a *good* feature makes a whole
+    object (and other instances of it) light up together. PCA-RGB cannot show this
+    because it keeps only ~15% of the feature variance.
+    """
+    F = _features(data, feat_start)
+    ref = np.asarray(ref_vec, dtype=np.float32).reshape(-1)
+    fn = F / (np.linalg.norm(F, axis=1, keepdims=True) + 1e-9)
+    sim = fn @ (ref / (np.linalg.norm(ref) + 1e-9))     # cosine in [-1, 1]
+    s = normalize(sim, norm)
+    cm = _get_cmap(cmap)
+    if cm is None:
+        return np.stack([s, s, s], axis=1)
+    return np.asarray(cm(s))[:, :3]
+
+
 def build_colors(data: np.ndarray, cfg) -> np.ndarray:
     mode = cfg["mode"]
     if mode == "rgb":
@@ -172,4 +232,13 @@ def build_colors(data: np.ndarray, cfg) -> np.ndarray:
         return color_confusion(data, cfg["gt_col"], cfg["pred_col"])
     if mode == "time":
         return color_time(data, cfg.get("time_col", 6), cfg.get("time_cmap", "coolwarm"))
-    raise ValueError(f"unknown mode '{mode}' (rgb|feature|label|confusion|time)")
+    if mode == "similarity":
+        # ref is resolved in visualize.main (it may need an interactive pick), then
+        # stashed in cfg["_ref_vec"]; fall back to the 'moving' prototype.
+        ref = cfg.get("_ref_vec")
+        if ref is None:
+            ref = reference_vector(data, cfg.get("ref", "moving"),
+                                   cfg.get("feat_start", 8), cfg.get("label_col", 7))
+        return color_similarity(data, ref, cfg.get("feat_start", 8),
+                                cfg.get("sim_cmap", "turbo"), cfg.get("norm", "percentile"))
+    raise ValueError(f"unknown mode '{mode}' (rgb|feature|label|confusion|time|similarity)")
