@@ -1,0 +1,36 @@
+# 4D-LiDAR FeatVis defaults. Any CLI flag (python visualize.py --xxx) overrides these.
+
+npy_file: examples/feat_seq08_4017.npy
+
+# rgb | feature | label | confusion | time
+# (accumulated 4D dump is (N,7): [x,y,z,pca_r,pca_g,pca_b,time])
+mode: rgb
+
+# --- rgb mode (our PCA-RGB feature dump: [x,y,z,pca_r,pca_g,pca_b]) ---
+color_cols: [3, 4, 5]      # the 3 feature columns used as R,G,B
+gamma: 0.8                 # <1 brightens; 1.0 = raw
+
+# --- feature mode (single scalar -> colormap, MOS_visualizer-compatible) ---
+feat_col: 3                # which column is the scalar (PCA-1 in our dump)
+norm: percentile           # percentile | minmax | sigmoid
+cmap: viridis
+
+# --- time mode (accumulated dump: colour the sweep-time -> see motion trails) ---
+time_col: 6                # signed seconds, 0 == current frame
+time_cmap: coolwarm        # past=blue ... t0=white ... future=red
+
+# --- label / confusion modes (INTEGER class columns; modes error on float feature cols) ---
+# feature dump (N,8) stores the GT label at col 7. confusion needs a prediction
+# dump that carries BOTH gt and pred integer columns.
+label_col: 7               # integer class column (0 static, 1 moving, -1 ignore)
+gt_col: 7                  # confusion: ground-truth column
+pred_col: 8                # confusion: prediction column (only in a MOS-prediction dump)
+
+# --- scene ---
+range_crop: [0.0, 60.0]    # keep xy-distance in [rmin, rmax] m; null to disable
+flatten_2d: false          # squash z (top-down feel) in the 3D view
+point_size: 2.0
+background: [0.05, 0.05, 0.08]
+
+# set to a path (e.g. out.png) to save a top-down image instead of opening a 3D window
+bev: null
