@@ -89,9 +89,23 @@ Column indices are overridable (`--color-cols`, `--feat-col`, `--time-col`,
 python tools/extract_features_4d.py \
     --ckpt exp/utonia4d/pretrain/model/model_last.pth \
     --seq 8 --frame 4017 --out feat_seq08_4017.npy
-# --teacher  : use the EMA-teacher encoder
-# --t0-only  : legacy single-frame dump (no accumulation)
+# --teacher      : use the EMA-teacher encoder
+# --t0-only      : legacy single-frame dump (no accumulation)
+# --hypercolumn  : concat ALL encoder scales per point -> no 0.8m voxel 'blocks'
 ```
+
+### Why does `rgb` look blocky? (resolution)
+
+The pretrain encoder is `enc_mode` (encoder only, no decoder), so its features live
+at the **coarse bottleneck grid (~0.8 m)**. The default dump broadcasts that one
+coarse feature to every point inside the 0.8 m voxel, so you see ~0.8 m colored
+cubes -- e.g. one frame has 224k points but only ~9k distinct features. This is
+*honest*: it is the resolution at which the self-distillation actually operates.
+
+Pass `--hypercolumn` to instead concat every encoder scale (0.05 m fine ... 0.8 m
+coarse) per point -> features become per-point unique (no blocks), at the cost of
+mixing in lower, less-SSL-supervised levels. Use it for a smooth zoomed-in 3D view;
+use the default to see the true representation resolution.
 
 For `confusion`, export a per-point `[x, y, z, gt, pred]` npy from the finetuned MOS
 model and point `--gt-col` / `--pred-col` at the gt/pred columns.
