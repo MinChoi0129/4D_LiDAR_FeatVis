@@ -52,7 +52,9 @@ def parse_args():
     ap.add_argument("--pick", action="store_true",
                     help="similarity: shift+click a reference point in a picker window first")
     ap.add_argument("--feat-start", type=int, help="similarity: first feature column (default 8)")
-    ap.add_argument("--sim-cmap", help="similarity colormap (default turbo)")
+    ap.add_argument("--sim-cmap", help="similarity colormap (default inferno)")
+    ap.add_argument("--no-whiten", action="store_true",
+                    help="similarity: disable feature whitening (shows the raw geometry-dominated result)")
     ap.add_argument("--color-cols", type=int, nargs=3, help="rgb mode: 3 feature columns")
     ap.add_argument("--gamma", type=float, help="rgb mode: gamma (<1 brightens)")
     ap.add_argument("--feat-col", type=int, help="feature mode: scalar column")
@@ -75,7 +77,7 @@ def merge_cfg(args):
         mode="rgb", color_cols=[3, 4, 5], gamma=1.0,
         feat_col=3, norm="percentile", cmap="viridis", time_col=6, time_cmap="coolwarm",
         label_col=7, gt_col=7, pred_col=8,
-        ref="moving", feat_start=8, sim_cmap="turbo",
+        ref="moving", feat_start=8, sim_cmap="inferno", whiten=True,
         range_crop=[0.0, 60.0], flatten_2d=False,
         point_size=2.0, background=[0.05, 0.05, 0.08],
     )
@@ -92,6 +94,8 @@ def merge_cfg(args):
     }
     cfg.update({k: v for k, v in o.items() if v is not None})
     cfg["pick"] = args.pick
+    if args.no_whiten:
+        cfg["whiten"] = False
     if args.range_crop is not None:
         cfg["range_crop"] = args.range_crop
     if args.no_range_crop:

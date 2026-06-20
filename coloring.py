@@ -201,15 +201,27 @@ def reference_vector(data: np.ndarray, spec, feat_start: int = 8,
 
 
 def color_similarity(data: np.ndarray, ref_vec: np.ndarray, feat_start: int = 8,
-                     cmap: str = "turbo", norm: str = "percentile") -> np.ndarray:
+                     cmap: str = "inferno", norm: str = "percentile",
+                     whiten: bool = True) -> np.ndarray:
     """Cosine similarity of each point's feature to ref_vec -> colormap (bright=similar).
 
     This is the honest "are the features good?" view: a *good* feature makes a whole
     object (and other instances of it) light up together. PCA-RGB cannot show this
     because it keeps only ~15% of the feature variance.
+
+    whiten: the feature block is variance-ordered, so the top 1-2 PCA axes (geometry:
+    range/height) otherwise dominate the dot product and make EVERYTHING look similar.
+    Standardizing each axis to unit variance lets all axes contribute equally, so the
+    similarity reflects the learned pattern rather than raw geometry. Strongly
+    recommended; pass whiten=False to see the raw (geometry-dominated) behaviour.
     """
-    F = _features(data, feat_start)
+    F = _features(data, feat_start).astype(np.float32)
     ref = np.asarray(ref_vec, dtype=np.float32).reshape(-1)
+    if whiten:
+        mu = F.mean(0)
+        sd = F.std(0) + 1e-6
+        F = (F - mu) / sd
+        ref = (ref - mu) / sd
     fn = F / (np.linalg.norm(F, axis=1, keepdims=True) + 1e-9)
     sim = fn @ (ref / (np.linalg.norm(ref) + 1e-9))     # cosine in [-1, 1]
     s = normalize(sim, norm)
@@ -240,5 +252,6 @@ def build_colors(data: np.ndarray, cfg) -> np.ndarray:
             ref = reference_vector(data, cfg.get("ref", "moving"),
                                    cfg.get("feat_start", 8), cfg.get("label_col", 7))
         return color_similarity(data, ref, cfg.get("feat_start", 8),
-                                cfg.get("sim_cmap", "turbo"), cfg.get("norm", "percentile"))
+                                cfg.get("sim_cmap", "inferno"), cfg.get("norm", "percentile"),
+                                cfg.get("whiten", True))
     raise ValueError(f"unknown mode '{mode}' (rgb|feature|label|confusion|time|similarity)")

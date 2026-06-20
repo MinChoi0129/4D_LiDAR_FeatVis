@@ -103,6 +103,13 @@ python visualize.py --mode similarity --ref-idx 12345
 python visualize.py --mode similarity --ref-xyz 8.0 -3.0 0.0
 ```
 
+By default the features are **whitened** (each PCA axis standardized) before the
+cosine. Without it, the top 1-2 variance axes (geometry: range/height) dominate and
+*almost everything lights up* — a misleading "all similar". Whitening lets all axes
+count equally, so the map reflects the learned pattern. Pass `--no-whiten` to see the
+raw geometry-dominated behaviour. The colormap is sequential (`inferno`: dark=different,
+bright=similar) so low similarity is clearly dark.
+
 For the 4D goal specifically: `--ref moving` shows whether moving objects are
 *distinctive in feature space*. If moving and static cars light up the same, the
 SSL leaned on geometry, not motion — a real, useful negative result. The decisive
